@@ -27,46 +27,88 @@ startup
         if (oldValue == null && currentValue != null) {vars.Log(key + ": " + currentValue);}
     });
 
-	//creates text components for variable information
-	vars.SetTextComponent = (Action<string, string>)((id, text) =>
-	{
-	var textSettings = timer.Layout.Components.Where(x => x.GetType().Name == "TextComponent").Select(x => x.GetType().GetProperty("Settings").GetValue(x, null));
-	var textSetting = textSettings.FirstOrDefault(x => (x.GetType().GetProperty("Text1").GetValue(x, null) as string) == id);
-	if (textSetting == null)
-	    {
-            var textComponentAssembly = Assembly.LoadFrom("Components\\LiveSplit.Text.dll");
-            var textComponent = Activator.CreateInstance(textComponentAssembly.GetType("LiveSplit.UI.Components.TextComponent"), timer);
-            timer.Layout.LayoutComponents.Add(new LiveSplit.UI.Components.LayoutComponent("LiveSplit.Text.dll", textComponent as LiveSplit.UI.Components.IComponent));
-            textSetting = textComponent.GetType().GetProperty("Settings", BindingFlags.Instance | BindingFlags.Public).GetValue(textComponent, null);
-            textSetting.GetType().GetProperty("Text1").SetValue(textSetting, id);
-	    }
-	textSetting.GetType().GetProperty("Text2").SetValue(textSetting, text);
-    });
+	#region TextComponent
+    //Dictionary to cache created/reused layout components by their left-hand label (Text1)
+    vars.lcCache = new Dictionary<string, LiveSplit.UI.Components.ILayoutComponent>();
 
-    #region setting creation
+    //Function to set (or update) a text component
+    vars.SetText = (Action<string, object>)((text1, text2) =>
+{
+    const string FileName = "LiveSplit.Text.dll";
+    LiveSplit.UI.Components.ILayoutComponent lc;
+
+    //Try to find an existing layout component with matching Text1 (label)
+    if (!vars.lcCache.TryGetValue(text1, out lc))
+    {
+        lc = timer.Layout.LayoutComponents.Reverse().Cast<dynamic>()
+            .FirstOrDefault(llc => llc.Path.EndsWith(FileName) && llc.Component.Settings.Text1 == text1)
+            ?? LiveSplit.UI.Components.ComponentManager.LoadLayoutComponent(FileName, timer);
+
+        //Cache it for later reference
+        vars.lcCache.Add(text1, lc);
+    }
+
+    //If it hasn't been added to the layout yet, add it
+    if (!timer.Layout.LayoutComponents.Contains(lc))
+        timer.Layout.LayoutComponents.Add(lc);
+
+    //Set the label (Text1) and value (Text2) of the text component
+    dynamic tc = lc.Component;
+    tc.Settings.Text1 = text1;
+    tc.Settings.Text2 = text2.ToString();
+});
+
+    //Function to remove a single text component by its label
+    vars.RemoveText = (Action<string>)(text1 =>
+{
+    LiveSplit.UI.Components.ILayoutComponent lc;
+
+    //If it's cached, remove it from the layout and the cache
+    if (vars.lcCache.TryGetValue(text1, out lc))
+    {
+        timer.Layout.LayoutComponents.Remove(lc);
+        vars.lcCache.Remove(text1);
+    }
+});
+
+    //Function to remove all text components that were added via this script
+    vars.RemoveAllTexts = (Action)(() =>
+{
+    //Remove each one from the layout
+    foreach (var lc in vars.lcCache.Values)
+        timer.Layout.LayoutComponents.Remove(lc);
+
+    //Clear the cache
+    vars.lcCache.Clear();
+});
+#endregion
+
+#region setting creation
 	//Autosplitter Settings Creation
 	dynamic[,] _settings =
 	{
-	{"AutoReset", false, "Automatically reset timer after Restarting run", null},
+    {"textDisplay", true, "Text Options", null},
+    {"removeTexts", true, "Remove all texts on exit", "textDisplay"},
+	{"AutoReset", true, "Automatically reset timer after Restarting run", null},
 	{"AutosplitOptions", true, "Autosplit Options - SELECT ONLY ONE", null},
 		{"RegionSplit", true, "Split on every Region change", "AutosplitOptions"},
 	{"VariableInformation", true, "Variable Information", null},
 		{"PlayerInfo", true, "Player Info", "VariableInformation"},
-			{"playerAscent", true, "playerAscent", "PlayerInfo"},
-			{"ascentRate", true, "ascentRate", "PlayerInfo"},
+			{"Run Peak Ascent", true, "Player Peak Ascent of this run", "PlayerInfo"},
+			{"Ascent Rate", true, "Ascent Rate of this run", "PlayerInfo"},
 			{"IGT", false, "IGT Display", "PlayerInfo"},
 			{"splitMethod", false, "Autosplit Method Display", "PlayerInfo"},
 		{"LevelInfo", true, "Level Info", "VariableInformation"},
-			{"regionName", true, "regionName", "LevelInfo"},
-			{"subregionName", false, "subregionName", "LevelInfo"},
-			{"levelName", true, "levelName", "LevelInfo"},
+			{"Region Name", true, "Current Regigon Name", "LevelInfo"},
+			{"Subregion Name", false, "Current Subregion Name", "LevelInfo"},
+			{"Level Name", true, "Current Level Name", "LevelInfo"},
 		{"UnitySceneInfo", false, "Unity Scene Info", "VariableInformation"},
 			{"UnitySceneLoading", false, "Unity Scene Loading", "UnitySceneInfo"},
 			{"LoadingSceneName", false, "Loading Scene Name", "UnitySceneInfo"},
 			{"ActiveSceneName", false, "Active Scene Name", "UnitySceneInfo"},
 	};
 	vars.Helper.Settings.Create(_settings);
-    #endregion
+#endregion
 }
 
 init
@@ -83,6 +125,15 @@ init
 
     //Starting the timer for the splitter cooldown
     vars.SplitCooldownTimer.Start();
+
+    //Helper function that sets or removes text depending on whether the setting is enabled - only works in `init` or later because `startup` cannot read setting values
+    vars.SetTextIfEnabled = (Action<string, object>)((text1, text2) =>
+{
+    if (settings[text1])            //If the matching setting is checked
+        vars.SetText(text1, text2); //Show the text
+    else
+        vars.RemoveText(text1);     //Otherwise, remove it
+});
 
     //This is where we will load custom properties from the code
     vars.Helper.TryLoad = (Func<dynamic, bool>)(mono =>
@@ -145,17 +196,17 @@ update
     if(old.loadingScene != current.loadingScene){vars.SceneLoading = "Loading";}
     if(old.activeScene != current.activeScene){vars.SceneLoading = "Not Loading";}
 
-    //Prints various information based on settings selections
-    if(settings["splitMethod"]){vars.SetTextComponent("Split Method:",vars.currentAutosplitMethod.ToString());}
-    if(settings["levelName"]){vars.SetTextComponent("Level: ",current.levelName.ToString());}
-    if(settings["regionName"]){vars.SetTextComponent("Region: ",current.regionName.ToString());}
-    if(settings["subregionName"]){vars.SetTextComponent("Subregion: ",current.subregionName.ToString());}
-    if(settings["IGT"]){vars.SetTextComponent("IGT: ",current.IGT.ToString());}
-    if(settings["playerAscent"]){vars.SetTextComponent("Run Peak Ascent: ",current.playerAscentPretty.ToString() + " Meters");}
-    if(settings["ascentRate"]){vars.SetTextComponent("Ascent Rate: ",current.ascentRatePretty.ToString() + " M/s");}
-    if(settings["UnitySceneLoading"]){vars.SetTextComponent("Scene Loading?",vars.SceneLoading.ToString());}
-    if(settings["LoadingSceneName"]){vars.SetTextComponent("LScene Name: ",current.loadingScene.ToString());}
-    if(settings["ActiveSceneName"]){vars.SetTextComponent("AScene Name: ",current.activeScene.ToString());}
+    //More text component stuff - checking for setting and then generating the text. No need for .ToString since we do that previously
+    vars.SetTextIfEnabled("splitMethod",vars.currentAutosplitMethod);
+    vars.SetTextIfEnabled("Region Name",current.regionName);
+    vars.SetTextIfEnabled("Subregion Name",current.subregionName);
+    vars.SetTextIfEnabled("Level Name",current.levelName);
+    vars.SetTextIfEnabled("IGT",current.IGT);
+    vars.SetTextIfEnabled("Run Peak Ascent",current.playerAscentPretty + " Meters");
+    vars.SetTextIfEnabled("Ascent Rate",current.ascentRatePretty + " M/s");
+    vars.SetTextIfEnabled("UnitySceneLoading",vars.SceneLoading);
+    vars.SetTextIfEnabled("LoadingSceneName",current.loadingScene);
+    vars.SetTextIfEnabled("ActiveSceneName",current.activeScene);
 }
 
 onStart
@@ -166,7 +217,7 @@ onStart
 
 start
 {
-    if(current.IGT > 0 && current.IGT <= 2)
+    if((current.IGT > 0 && current.IGT <= 2) && (current.activeScene != "Main-Menu"))
     {
     vars.SplitCooldownTimer.Restart();
     return true;
