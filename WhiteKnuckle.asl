@@ -163,8 +163,10 @@ update
     vars.Watch(old, current, "regionName");
     vars.Watch(old, current, "subregionName");
 
-    //Trying to handle errors, idk why but subregion seems to be particularly bad
-    if (current.subregionName == null) {current.subregionName = "null";}
+        //error handling
+    if(current.subregionName == null){current.subregionName = "null";}
+    if(current.regionName == null){current.regionName = "null";}
+
 
     //Updating Current Autosplit Method var for use in text component
     if (settings["RegionSplit"]) {vars.currentAutosplitMethod = "Region Change";}
@@ -226,11 +228,21 @@ start
 
 split
 {
-    if(vars.SplitCooldownTimer.Elapsed.TotalSeconds < 5) {return false;}
+    if(vars.SplitCooldownTimer.Elapsed.TotalSeconds < 2) {return false;}
 
     if 
+    ((settings["RegionSplit"]) && (current.regionName != old.regionName) && (old.regionName != "null"))
+    {
+        vars.SplitCooldownTimer.Restart();
+        return true;
+    }
+    
+    if 
     (
-        settings["RegionSplit"] && current.regionName != old.regionName && old.regionName != "null"
+        (current.levelName == "Training_Level_01" && current.playerAscent > 8 && current.playerAscent < 9)  || // Mantling & Momentum
+        (current.levelName == "Training_Level_01" && current.playerAscent > 24 && current.playerAscent < 25)  || // Climbing & Stamina
+        (current.levelName == "Training_Level_01" && current.playerAscent > 50.5 && current.playerAscent < 51.1)  || // Pitons & Inventory
+        (current.levelName == "Training_Level_01" && current.playerAscent > 67   && current.playerAscent < 68)   // Rebar
     )
     {
         vars.SplitCooldownTimer.Restart();
