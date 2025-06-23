@@ -2,6 +2,7 @@ state("White Knuckle") { }
 
 startup
 {
+    #region ASL Helper Setup
     //Load asl-help binary and instantiate it - will inject code into the asl in the background
     Assembly.Load(File.ReadAllBytes("Components/asl-help")).CreateInstance("Unity");
     //Set the helper to load the scene manager, you probably want this (the helper is set at vars.Helper automagically)
@@ -26,6 +27,7 @@ startup
         // first iteration, print starting values
         if (oldValue == null && currentValue != null) {vars.Log(key + ": " + currentValue);}
     });
+    #endregion
 
 	#region TextComponent
     //Dictionary to cache created/reused layout components by their left-hand label (Text1)
@@ -83,7 +85,7 @@ startup
 });
 #endregion
 
-#region setting creation
+    #region setting creation
 	//Autosplitter Settings Creation
 	dynamic[,] _settings =
 	{
@@ -92,6 +94,16 @@ startup
 	{"AutoReset", true, "Automatically reset timer after Restarting run", null},
 	{"AutosplitOptions", true, "Autosplit Options - SELECT ONLY ONE", null},
 		{"RegionSplit", true, "Split on every Region change", "AutosplitOptions"},
+        {"SubregionSplits", false, "Split on specific Subregions", "AutosplitOptions"},
+            {"Finish Silos Safe Room", false, "Finish Silos Safe Room", "SubregionSplits"},
+            {"Finish Pipeworks Drainage System", false, "Finish Pipeworks Drainage System", "SubregionSplits"},
+            {"Finish Interlude I", false, "Finish Interlude I", "SubregionSplits"},
+            {"Finish Elevator", false, "Finish Elevator", "SubregionSplits"},
+            {"Finish Habitation Safe Area", false, "Finish Habitation Safe Area", "SubregionSplits"},
+            {"Finish Habitation Service Shaft", false, "Finish Habitation Service Shaft", "SubregionSplits"},
+            {"Finish Haunted Pier", false, "Finish Haunted Pier", "SubregionSplits"},
+            {"Finish Delta Labs Lobby", false, "Finish Silos Safe Room", "SubregionSplits"},
+            {"Finish Delta Labs", false, "Finish Silos Safe Room", "SubregionSplits"},
 	{"VariableInformation", true, "Variable Information", null},
 		{"PlayerInfo", true, "Player Info", "VariableInformation"},
 			{"Run Peak Ascent", true, "Player Peak Ascent of this run", "PlayerInfo"},
@@ -108,7 +120,7 @@ startup
 			{"ActiveSceneName", false, "Active Scene Name", "UnitySceneInfo"},
 	};
 	vars.Helper.Settings.Create(_settings);
-#endregion
+    #endregion
 }
 
 init
@@ -123,9 +135,9 @@ init
     current.playerAscent = 0;
     current.IGT = 0;
 
+    #region var setup
     //Starting the timer for the splitter cooldown
     vars.SplitCooldownTimer.Start();
-
     //Helper function that sets or removes text depending on whether the setting is enabled - only works in `init` or later because `startup` cannot read setting values
     vars.SetTextIfEnabled = (Action<string, object>)((text1, text2) =>
 {
@@ -152,6 +164,7 @@ init
     string name = vars.Helper.ReadString(256, ReadStringType.UTF8, scene + 0x38);
     return name == "" ? null : name;
     });
+    #endregion
 }
 
 update
@@ -230,13 +243,25 @@ split
 {
     if(vars.SplitCooldownTimer.Elapsed.TotalSeconds < 2) {return false;}
 
-    if 
-    ((settings["RegionSplit"]) && (current.regionName != old.regionName) && (old.regionName != "null"))
-    {
-        vars.SplitCooldownTimer.Restart();
-        return true;
-    }
+    //Full Game Region Autosplits
+    if ((settings["RegionSplit"]) && (current.regionName != old.regionName) && (old.regionName != "null")) {vars.SplitCooldownTimer.Restart();return true;}
     
+    //Full Game Subregion Autosplits
+    if 
+    (
+        settings["Finish Silos Safe Room"] && current.subregionName != "Safe Room" && old.subregionName == "Safe Room" ||
+        settings["Finish Pipeworks Drainage System"] && current.subregionName != "Drainage System" && old.subregionName == "Drainage System" ||
+        settings["Finish Interlude I"] && current.regionName == "pipeworks" && old.levelName == "M1_Campaign_Transition_Silo_To_Pipeworks_01" && current.levelName != "M1_Campaign_Transition_Silo_To_Pipeworks_01" ||
+        settings["Finish Elevator"] && current.subregionName != "Service Shaft" && old.subregionName == "Service Shaft" && old.levelName == "M3_Campaign_Transition_Pipeworks_To_Habitation_01" ||
+        settings["Finish Habitation Safe Area"] && current.subregionName != "Safe Area" && old.subregionName == "Safe Area" || //needs some adjusting, maybe check height?
+        settings["Finish Habitation Service Shaft"] && current.subregionName == "Service Shaft Ending" && current.subregionName == "Haunted Pier Entrance" || // modify first condition just to make it not weird
+        settings["Finish Haunted Pier"] && current.subregionName != "Haunted Pier" && old.subregionName == "Haunted Pier" ||
+        settings["Finish Delta Labs Lobby"] && current.subregionName != "Delta Labs Lobby" && old.subregionName == "Delta Labs Lobby" ||
+        settings["Finish Delta Labs"] && current.subregionName != "Delta Labs" && old.subregionName == "Delta Labs" 
+    ) 
+    {vars.SplitCooldownTimer.Restart();return true;}
+    
+    //Tutorial Autosplits
     if 
     (
         (current.levelName == "Training_Level_01" && current.playerAscent > 8 && current.playerAscent < 9)  || // Mantling & Momentum
@@ -244,10 +269,7 @@ split
         (current.levelName == "Training_Level_01" && current.playerAscent > 50.5 && current.playerAscent < 51.1)  || // Pitons & Inventory
         (current.levelName == "Training_Level_01" && current.playerAscent > 67   && current.playerAscent < 68)   // Rebar
     )
-    {
-        vars.SplitCooldownTimer.Restart();
-        return true;
-    }
+    {vars.SplitCooldownTimer.Restart();return true;}
 }
 
 isLoading
