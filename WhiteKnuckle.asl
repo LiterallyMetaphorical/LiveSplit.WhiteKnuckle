@@ -12,8 +12,6 @@ startup
     vars.Helper.AlertLoadless();
     //Initializing Scene Loading for load removal & text component later
     vars.SceneLoading = "";
-    //Setting up variable to show current autosplit method for use in text component later on
-    vars.currentAutosplitMethod = "";
     //creating stopwatch to prevent very fast multi-splits
     vars.SplitCooldownTimer = new Stopwatch();
 
@@ -22,10 +20,14 @@ startup
         // here we see a wild typescript dev attempting C#... oh, the humanity...
         var currentValue = currentLookup.ContainsKey(key) ? (currentLookup[key] ?? "(null)") : null;
         var oldValue = oldLookup.ContainsKey(key) ? (oldLookup[key] ?? "(null)") : null;
+
+    /*Debugging
         // print if there's a change
         if (oldValue != null && currentValue != null && !oldValue.Equals(currentValue)) {vars.Log(key + ": " + oldValue + " -> " + currentValue);}
         // first iteration, print starting values
         if (oldValue == null && currentValue != null) {vars.Log(key + ": " + currentValue);}
+    */
+
     });
     #endregion
 
@@ -97,8 +99,8 @@ startup
         {"SubregionSplits", false, "Split on specific Subregions - EXPERIMENTAL", "AutosplitOptions"},
             {"Finish Silos Safe Room", false, "Finish Silos Safe Room", "SubregionSplits"},
             {"Finish Pipeworks Drainage System", false, "Finish Pipeworks Drainage System", "SubregionSplits"},
-            {"Finish Interlude I", false, "Finish Interlude I", "SubregionSplits"},
-            {"Finish Elevator", false, "Finish Elevator", "SubregionSplits"},
+            {"Finish Intelude: Lockdown", false, "Finish Intelude: Lockdown", "SubregionSplits"},
+            {"Finish Intelude: Ascent", false, "Finish Intelude: Ascent", "SubregionSplits"},
             {"Finish Habitation Safe Area", false, "Finish Habitation Safe Area", "SubregionSplits"},
             {"Finish Habitation Service Shaft", false, "Finish Habitation Service Shaft", "SubregionSplits"},
             {"Finish Haunted Pier", false, "Finish Haunted Pier", "SubregionSplits"},
@@ -108,11 +110,9 @@ startup
 		{"PlayerInfo", true, "Player Info", "VariableInformation"},
 			{"Run Peak Ascent", true, "Player Peak Ascent of this run", "PlayerInfo"},
 			{"Ascent Rate", true, "Ascent Rate of this run", "PlayerInfo"},
-			{"IGT", false, "IGT Display", "PlayerInfo"},
-			{"splitMethod", false, "Autosplit Method Display", "PlayerInfo"},
 		{"LevelInfo", true, "Level Info", "VariableInformation"},
 			{"Region Name", true, "Current Regigon Name", "LevelInfo"},
-			{"Subregion Name", false, "Current Subregion Name", "LevelInfo"},
+			{"Subregion Name", true, "Current Subregion Name", "LevelInfo"},
 			{"Level Name", true, "Current Level Name", "LevelInfo"},
 		{"UnitySceneInfo", false, "Unity Scene Info", "VariableInformation"},
 			{"UnitySceneLoading", false, "Unity Scene Loading", "UnitySceneInfo"},
@@ -180,10 +180,6 @@ update
     if(current.subregionName == null){current.subregionName = "null";}
     if(current.regionName == null){current.regionName = "null";}
 
-
-    //Updating Current Autosplit Method var for use in text component
-    if (settings["RegionSplit"]) {vars.currentAutosplitMethod = "Region Change";}
-
     //Setting up pretty versions of Peak Ascent and Ascent Rate, starting with Peak Ascent
     if(current.playerAscent > 0 && current.playerAscent <= 100){current.playerAscentPretty = current.playerAscent.ToString().Substring(0, current.playerAscent.ToString().Length - 4);} //vars.Log("Over 0m & equal or under 100m, Removing 4 Characters from end of string");
     if(current.playerAscent > 100 && current.playerAscent <= 1000){current.playerAscentPretty = current.playerAscent.ToString().Substring(0, current.playerAscent.ToString().Length - 3);}//vars.Log("Over 100m & equal or under 1,000m, Removing 3 Characters from end of string");
@@ -212,11 +208,9 @@ update
     if(old.activeScene != current.activeScene){vars.SceneLoading = "Not Loading";}
 
     //More text component stuff - checking for setting and then generating the text. No need for .ToString since we do that previously
-    vars.SetTextIfEnabled("splitMethod",vars.currentAutosplitMethod);
     vars.SetTextIfEnabled("Region Name",current.regionName);
     vars.SetTextIfEnabled("Subregion Name",current.subregionName);
     vars.SetTextIfEnabled("Level Name",current.levelName);
-    vars.SetTextIfEnabled("IGT",current.IGT);
     vars.SetTextIfEnabled("Run Peak Ascent",current.playerAscentPretty + " Meters");
     vars.SetTextIfEnabled("Ascent Rate",current.ascentRatePretty + " M/s");
     vars.SetTextIfEnabled("UnitySceneLoading",vars.SceneLoading);
@@ -232,16 +226,20 @@ onStart
 
 start
 {
-    if((current.IGT > 0 && current.IGT <= 2) && (current.activeScene != "Main-Menu"))
+    if (current.IGT > 0 && current.IGT <= 2 && current.activeScene != "Main-Menu")
     {
-    vars.SplitCooldownTimer.Restart();
-    return true;
+        if (current.levelName != "Training_Level_01")
+        {
+            vars.SplitCooldownTimer.Restart();
+        }
+        return true;
     }
+    return false;
 }
 
 split
 {
-    if(vars.SplitCooldownTimer.Elapsed.TotalSeconds < 2) {return false;}
+    if(vars.SplitCooldownTimer.Elapsed.TotalSeconds < 10) {return false;}
 
     //Full Game Region Autosplits
     if ((settings["RegionSplit"]) && (current.regionName != old.regionName) && (old.regionName != "null")) {vars.SplitCooldownTimer.Restart();return true;}
@@ -251,10 +249,10 @@ split
     (
         settings["Finish Silos Safe Room"] && current.subregionName != "Safe Room" && old.subregionName == "Safe Room" ||
         settings["Finish Pipeworks Drainage System"] && current.subregionName != "Drainage System" && old.subregionName == "Drainage System" ||
-        settings["Finish Interlude I"] && current.regionName == "pipeworks" && old.levelName == "M1_Campaign_Transition_Silo_To_Pipeworks_01" && current.levelName != "M1_Campaign_Transition_Silo_To_Pipeworks_01" ||
-        settings["Finish Elevator"] && current.subregionName != "Service Shaft" && old.subregionName == "Service Shaft" && old.levelName == "M3_Campaign_Transition_Pipeworks_To_Habitation_01" ||
+        settings["Finish Intelude: Lockdown"] && current.regionName == "pipeworks" && old.levelName == "M1_Campaign_Transition_Silo_To_Pipeworks_01" && current.levelName != "M1_Campaign_Transition_Silo_To_Pipeworks_01" ||
+        settings["Finish Intelude: Ascent"] && current.subregionName != "Service Shaft" && old.subregionName == "Service Shaft" && old.levelName == "M3_Campaign_Transition_Pipeworks_To_Habitation_01" ||
         settings["Finish Habitation Safe Area"] && current.subregionName != "Safe Area" && old.subregionName == "Safe Area" || //needs some adjusting, maybe check height?
-        settings["Finish Habitation Service Shaft"] && current.subregionName == "Service Shaft Ending" && current.subregionName == "Haunted Pier Entrance" || // modify first condition just to make it not weird
+        settings["Finish Habitation Service Shaft"] && old.subregionName != "Haunted Pier Entrance" && current.subregionName == "Haunted Pier Entrance" || 
         settings["Finish Haunted Pier"] && current.subregionName != "Haunted Pier" && old.subregionName == "Haunted Pier" ||
         settings["Finish Delta Labs Lobby"] && current.subregionName != "Delta Labs Lobby" && old.subregionName == "Delta Labs Lobby" ||
         settings["Finish Delta Labs"] && current.subregionName != "Delta Labs" && old.subregionName == "Delta Labs" 
