@@ -93,13 +93,14 @@ startup
 	{
     {"textDisplay",                                 true, "Text Options",                                       null},
     {"removeTexts",                                 true, "Remove all texts on exit",                           "textDisplay"},
-	{"AutoReset",                                   true, "Automatically reset timer after Restarting run",     null},
+	{"AutoReset",                                   true, "Autom reset timer after Restarting run - will save *fake* golds if they occur",     null},
 	{"AutosplitOptions",                            true, "Autosplit Options",                                  null},
-        {"DefaultSplits",                           true, "Campaign split logic implemented by Holly (WK Dev)", "AutosplitOptions"},
+        {"DefaultSplits",                           true, "Default Campaign split logic w/ help from Holly's (WK Dev) Speedrun Class", "AutosplitOptions"},
             //Campaign
             { "silos-saferoom-enter",               true, "Enter Silo's Safe Room",                     "DefaultSplits"},
-            { "i1-pressureseal",                    true, "Activate Interlude 1 Pressure Seal",         "DefaultSplits"},
-            { "i1-elevatorroom",                    true, "Enter Interlude 1 Elevator Room",            "DefaultSplits"},
+            { "Enter Interlude 1",                  true, "Enter Interlude 1",                          "DefaultSplits"},
+            { "i1-pressureseal",                    false, "Activate Interlude 1 Pressure Seal",        "DefaultSplits"},
+            { "i1-elevatorroom",                    false, "Enter Interlude 1 Elevator Room",           "DefaultSplits"},
             { "i1-pipeworksenter",                  true, "Enter Pipeworks",                            "DefaultSplits"},
             {"Finish Pipeworks Drainage System",    true, "Finish Pipeworks Drainage System",           "DefaultSplits"},
             { "i2-enter",                           true, "Begin Interlude 2",                          "DefaultSplits"},
@@ -322,6 +323,7 @@ split
     if 
     (
         settings["Finish Silos Safe Room"]              && current.subregionName    != "Safe Room"              && old.subregionName        == "Safe Room" ||
+        settings["Enter Interlude 1"]                   && old.levelName            != "M1_Campaign_Transition_Silo_To_Pipeworks_01" && current.levelName == "M1_Campaign_Transition_Silo_To_Pipeworks_01" ||
         settings["Finish Pipeworks Drainage System"]    && current.subregionName    != "Drainage System"        && old.subregionName        == "Drainage System" ||
         settings["Finish Intelude: Lockdown"]           && current.regionName       == "pipeworks"              && old.levelName            == "M1_Campaign_Transition_Silo_To_Pipeworks_01" && current.levelName != "M1_Campaign_Transition_Silo_To_Pipeworks_01" ||
         settings["Finish Intelude: Ascent"]             && current.subregionName    != "Service Shaft"          && old.subregionName        == "Service Shaft" && old.levelName == "M3_Campaign_Transition_Pipeworks_To_Habitation_01" ||
